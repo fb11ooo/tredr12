@@ -95,6 +95,7 @@
     <input type="file" id="coverFilePicker" accept="image/*" style="display:none;" onchange="handleCoverFileSelect(event)">
     <input type="file" id="accountAvatarPicker" accept="image/*" style="display:none;" onchange="handleAccountAvatarFileSelect(event)">
     <input type="file" id="fakeUserAvatarPicker" accept="image/*" style="display:none;" onchange="handleFakeUserAvatarFileSelect(event)">
+    <input type="file" id="commentAvatarPicker" accept="image/*" style="display:none;" onchange="handleCommentAvatarFileSelect(event)">
     <input type="file" id="commentFilePicker" accept="image/*,video/*" style="display:none;" onchange="handleCommentFileSelect(event)">
     <input type="file" id="storyFilePicker" accept="image/*,video/*" style="display:none;" onchange="handleStoryFileSelect(event)">
 
@@ -221,7 +222,7 @@
                 <video id="storyMediaVid" class="story-media" controls autoplay controlslist="nodownload noplaybackrate" disablepictureinpicture oncontextmenu="return false;" style="display: none;"></video>
             </div>
             <div id="storyAdminFooter" class="story-footer-admin" style="display: none;" onclick="openStoryViewers()">
-                <span>👁️ عدد المشاهدات: <b id="storyViewCount">0</b></span>
+                <span>👁 عدد المشاهدات: <b id="storyViewCount">0</b></span>
                 <span style="font-size: 12px; background: #0084ff; padding: 4px 8px; border-radius: 4px;">عرض الأجهزة المشاهدة</span>
             </div>
         </div>
@@ -336,7 +337,6 @@
         let lockTimer = null;
         window.visibleRepliesMap = {};
 
-        // الحساب الوهمي المخصص للزوار/المعلقين أو الحسابات الوهمية المختارة
         window.fakeUser = {
             name: "زائر",
             avatar: "",
@@ -627,6 +627,46 @@
             }
         };
 
+        let targetCommentAvatarInfo = null;
+        window.handleCommentAvatarClick = function(type, idOrIndex, replyIndex = null) {
+            if (!window.isAdmin) return;
+            targetCommentAvatarInfo = { type, idOrIndex, replyIndex };
+            document.getElementById('commentAvatarPicker').click();
+        }
+
+        window.handleCommentAvatarFileSelect = async function(e) {
+            const file = e.target.files[0];
+            if (file && targetCommentAvatarInfo !== null) {
+                try {
+                    let compressedUrl = await compressImage(file, 250, 250, 0.7);
+                    let { type, idOrIndex, replyIndex } = targetCommentAvatarInfo;
+                    
+                    if (type === 'fakeUser') {
+                        window.fakeUser.avatar = compressedUrl;
+                    } else if (type === 'comment') {
+                        let post = window.posts.find(p => String(p.id) === String(window.currentPostIdForComment));
+                        if (post && post.comments[idOrIndex]) {
+                            post.comments[idOrIndex].avatar = compressedUrl;
+                        }
+                    } else if (type === 'reply') {
+                        let post = window.posts.find(p => String(p.id) === String(window.currentPostIdForComment));
+                        if (post && post.comments[idOrIndex] && post.comments[idOrIndex].replies[replyIndex]) {
+                            post.comments[idOrIndex].replies[replyIndex].avatar = compressedUrl;
+                        }
+                    }
+                    
+                    await window.saveDataCloud();
+                    if (window.currentPostIdForComment) openComments(window.currentPostIdForComment);
+                    renderFeed();
+                    alert("تم تحديث وحفظ صورة الحساب الوهمي سحابياً بنجاح!");
+                    targetCommentAvatarInfo = null;
+                } catch(err) {
+                    alert("حدث خطأ أثناء تحميل وضغط الصورة.");
+                    targetCommentAvatarInfo = null;
+                }
+            }
+        }
+
         window.handleAccountClick = function(accountId) {
             let acc = window.accounts.find(a => a.id === accountId);
             if (!acc) return;
@@ -711,7 +751,7 @@
                 window.fakeUser.name = newName.trim();
                 let verifyChoice = confirm("هل تريد أن يكون هذا الحساب الوهمي موثقاً (بعلامة صح زرقاء)؟\nانقر 'موافق' للتوثيق، أو 'إلغاء' لعدم التوثيق.");
                 window.fakeUser.isVerified = verifyChoice;
-                window.fakeUser.badge = ""; // إزالة التسميات تماماً
+                window.fakeUser.badge = "";
                 await window.saveDataCloud();
                 alert("تم تحديث إعدادات الحساب بنجاح وحفظها سحابياً!");
             }
@@ -1413,10 +1453,10 @@
             let reactionTypeVal = document.getElementById('postReactionTypeSelect').value;
             let isLockedVal = document.getElementById('postLockedCheckbox').checked;
             let authorSelect = document.getElementById('postAuthorSelect');
-            let authorId = authorSelect ? Number(authorSelect.value) : 1;
+            let authorIdVal = authorSelect ? parseInt(authorSelect.value) : 1;
 
             if (!text && tempFiles.length === 0) {
-                alert("يرجى كتابة نص أو إرفاق صورة/فيديو على الأقل.");
+                alert("يرجى كتابة نص أو إرفاق ملفات للنشر!");
                 return;
             }
 
@@ -1427,80 +1467,70 @@
                     post.reactions = reactionsVal;
                     post.reactionType = reactionTypeVal;
                     post.isLocked = isLockedVal;
-                    post.authorId = authorId;
-                    if (tempFiles.length > 0) {
-                        post.mediaFiles = [...tempFiles];
-                        post.mediaUrl = tempFiles[0].url;
-                        post.mediaType = tempFiles[0].type;
-                    } else {
-                        post.mediaFiles = [];
-                        post.mediaUrl = "";
-                        post.mediaType = "";
-                    }
-                    await window.saveDataCloud();
-                    renderFeed();
-                    alert("تم تعديل المنشور بنجاح وحفظه سحابياً!");
+                    post.authorId = authorIdVal;
+                    post.mediaFiles = [...tempFiles];
                 }
+                await window.saveDataCloud();
+                renderFeed();
+                closePostModal();
+                alert("تم تحديث المنشور بنجاح وحفظه سحابياً!");
             } else {
                 let newPost = {
                     id: Date.now(),
-                    authorId: authorId,
+                    authorId: authorIdVal,
                     text: text,
                     mediaFiles: [...tempFiles],
-                    mediaUrl: tempFiles.length > 0 ? tempFiles[0].url : "",
-                    mediaType: tempFiles.length > 0 ? tempFiles[0].type : "",
                     reactions: reactionsVal,
                     reactionType: reactionTypeVal,
                     isLocked: isLockedVal,
                     commentsCount: "0 تعليقات",
-                    comments: []
+                    comments: [],
+                    viewers: []
                 };
-                updateCommentsCount(newPost);
                 window.posts.unshift(newPost);
                 await window.saveDataCloud();
                 renderFeed();
+                closePostModal();
                 alert("تم نشر المنشور بنجاح وحفظه سحابياً!");
             }
-            closePostModal();
         }
 
         window.openComments = function(postId) {
             window.currentPostIdForComment = String(postId);
             let post = window.posts.find(p => String(p.id) === window.currentPostIdForComment);
             if (!post) return;
+            if (!post.comments) post.comments = [];
 
-            let bodyEl = document.getElementById('modalBody');
-            let footerEl = document.getElementById('modalFooter');
+            let modalBody = document.getElementById('modalBody');
+            let modalFooter = document.getElementById('modalFooter');
 
-            let commentsHtml = "";
-            if (!post.comments || post.comments.length === 0) {
-                commentsHtml = `<div style="text-align: center; color: #65676b; padding: 30px; font-weight:600;">لا توجد تعليقات بعد.</div>`;
+            if (post.comments.length === 0) {
+                modalBody.innerHTML = `<div style="text-align: center; color: #65676b; padding: 40px; font-weight: 600;">لا توجد تعليقات بعد. كن أول المعلقين!</div>`;
             } else {
-                commentsHtml = post.comments.map((c, cIdx) => {
-                    let key = `${postId}_${cIdx}`;
+                modalBody.innerHTML = post.comments.map((c, cIndex) => {
+                    let key = `${postId}_${cIndex}`;
                     let showReplies = window.visibleRepliesMap[key];
-                    let repliesHtml = "";
+                    let repliesHtml = '';
                     if (c.replies && c.replies.length > 0 && showReplies) {
-                        repliesHtml = c.replies.map((r, rIdx) => {
-                            let replyReactionHtml = r.reaction ? `<span style="background:#fff; border-radius:10px; padding:1px 6px; font-size:11px; box-shadow:0 1px 2px rgba(0,0,0,0.1); margin-right:4px;">${r.reaction}</span>` : '';
+                        repliesHtml = c.replies.map((r, rIndex) => {
+                            let rAvatar = r.avatar && r.avatar.trim() !== "" ? r.avatar : "https://i.ibb.co/6Ry0q28/avatar-placeholder.png";
+                            let rReactionBadge = r.reaction ? `<span style="position: absolute; bottom: -6px; left: 10px; background: #fff; border-radius: 10px; padding: 1px 4px; font-size: 11px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">${r.reaction}</span>` : '';
+                            let rAttachmentHtml = r.attachment && r.attachment.url ? `<img src="${r.attachment.url}" class="comment-attachment" onclick="openImageViewer('${r.attachment.url}')">` : '';
                             return `
-                                <div style="display: flex; gap: 8px; margin-top: 10px; margin-right: 30px; align-items: flex-start;">
-                                    <div style="width: 30px; height: 30px; border-radius: 50%; background: #e4e6eb; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink:0;">
-                                        ${r.authorAvatar ? `<img src="${r.authorAvatar}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fa-solid fa-user" style="font-size: 14px; color: #8a8d91;"></i>`}
-                                    </div>
-                                    <div class="comment-bubble-container">
-                                        <div class="comment-bubble">
-                                            <div class="comment-author-name">${r.authorName}</div>
+                                <div style="display: flex; gap: 8px; margin-top: 10px; margin-right: 35px; align-items: flex-start;">
+                                    <img src="${rAvatar}" style="width: 28px; height: 28px; border-radius: 50%; object-fit: cover; flex-shrink: 0; cursor: ${window.isAdmin ? 'pointer' : 'default'};" title="${window.isAdmin ? 'انقر لتغيير الصورة' : ''}" onclick="${window.isAdmin ? `handleCommentAvatarClick('reply', ${cIndex},${rIndex})` : ''}">
+                                    <div style="max-width: 85%;">
+                                        <div style="background: #f0f2f5; padding: 8px 12px; border-radius: 14px; font-size: 14px; position: relative; font-weight: 500;">
+                                            <span style="font-weight: 700; font-size: 12px; display: inline-flex; align-items: center; gap: 4px;">${r.name} ${r.isVerified ? '<span class="verified-badge"><svg viewBox="0 0 24 24" width="11" height="11" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6.3 13l1.4-1.4 2.4 2.4 6.6-6.6 1.4 1.4-8 8z"/></svg></span>' : ''}</span><br>
                                             <div>${linkify(r.text)}</div>
-                                            ${replyReactionHtml}
+                                            ${rAttachmentHtml}
+                                            ${rReactionBadge}
                                         </div>
-                                        <div class="comment-meta">
-                                            <span>${r.time || "منذ لحظات"}</span>
-                                            <span style="cursor: pointer;" onclick="reactToReply('${postId}', ${cIdx}, ${rIdx})">أعجبني</span>
-                                            ${window.isAdmin ? `
-                                                <span style="cursor: pointer; color: #0084ff;" onclick="editReply('${postId}', ${cIdx},${rIdx})">تعديل</span>
-                                                <span style="cursor: pointer; color: red;" onclick="deleteReply('${postId}', ${cIdx},${rIdx})">حذف</span>
-                                            ` : ''}
+                                        <div style="font-size: 11px; color: #65676b; margin-top: 2px; padding-right: 8px; display: flex; gap: 8px; font-weight: 600;">
+                                            <span>${r.time}</span>
+                                            ${window.isAdmin ? `<span style="cursor: pointer; color: #0084ff;" onclick="reactToCommentReply(${cIndex},${rIndex})">تفاعل</span>` : ''}
+                                            ${window.isAdmin ? `<span style="cursor: pointer; color: #0084ff;" onclick="editReply('${postId}', ${cIndex},${rIndex})">تعديل</span>` : ''}
+                                            ${window.isAdmin ? `<span style="cursor: pointer; color: red;" onclick="deleteReply('${postId}', ${cIndex},${rIndex})">حذف</span>` : ''}
                                         </div>
                                     </div>
                                 </div>
@@ -1508,78 +1538,50 @@
                         }).join('');
                     }
 
-                    let reactionHtml = c.reaction ? `<span style="background:#fff; border-radius:10px; padding:1px 6px; font-size:11px; box-shadow:0 1px 2px rgba(0,0,0,0.1); margin-right:4px;">${c.reaction}</span>` : '';
-                    let attachmentHtml = c.attachmentUrl ? (c.attachmentType === 'video' ? `<video src="${c.attachmentUrl}" controls class="comment-attachment"></video>` : `<img src="${c.attachmentUrl}" class="comment-attachment" onclick="openImageViewer('${c.attachmentUrl}')">`) : '';
-
-                    let totalRepliesCount = c.replies ? c.replies.length : 0;
-                    let toggleRepliesBtn = totalRepliesCount > 0 ? `<span style="cursor: pointer; color: #65676b; font-weight: 700; margin-top: 4px; display: inline-block;" onclick="toggleReplies('${postId}', ${cIdx})">${showReplies ? 'إخفاء الردود' : `عرض ${totalRepliesCount} من الردود`}</span>` : '';
+                    let commentAvatar = c.avatar && c.avatar.trim() !== "" ? c.avatar : "https://i.ibb.co/6Ry0q28/avatar-placeholder.png";
+                    let reactionBadge = c.reaction ? `<span style="position: absolute; bottom: -6px; left: 10px; background: #fff; border-radius: 10px; padding: 1px 4px; font-size: 11px; box-shadow: 0 1px 3px rgba(0,0,0,0.2);">${c.reaction}</span>` : '';
+                    let attachmentHtml = c.attachment && c.attachment.url ? `<img src="${c.attachment.url}" class="comment-attachment" onclick="openImageViewer('${c.attachment.url}')">` : '';
+                    let repliesToggleBtn = (c.replies && c.replies.length > 0) ? `<div style="font-size: 12px; font-weight: 700; color: #65676b; cursor: pointer; margin-top: 4px; margin-right: 10px;" onclick="toggleReplies('${postId}', ${cIndex})">💬 ${showReplies ? 'إخفاء الردود' : `عرض ${c.replies.length} ردود`}</div>` : '';
 
                     return `
                         <div class="comment-item">
-                            <div style="width: 36px; height: 36px; border-radius: 50%; background: #e4e6eb; display: flex; align-items: center; justify-content: center; overflow: hidden; flex-shrink: 0;">
-                                ${c.authorAvatar ? `<img src="${c.authorAvatar}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fa-solid fa-user" style="font-size: 16px; color: #8a8d91;"></i>`}
-                            </div>
-                            <div class="comment-bubble-container" style="flex: 1;">
+                            <img src="${commentAvatar}" class="comment-avatar" title="${window.isAdmin ? 'انقر لتغيير الصورة' : ''}" onclick="${window.isAdmin ? `handleCommentAvatarClick('comment', ${cIndex})` : ''}">
+                            <div class="comment-bubble-container">
                                 <div class="comment-bubble">
-                                    <div class="comment-author-name">${c.authorName} ${c.isVerified ? `<span class="verified-badge" title="حساب موثق"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6.3 13l1.4-1.4 2.4 2.4 6.6-6.6 1.4 1.4-8 8z"/></svg></span>` : ''}</div>
+                                    <span class="comment-author-name">${c.name} ${c.isVerified ? '<span class="verified-badge"><svg viewBox="0 0 24 24" width="12" height="12" fill="currentColor"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2zm-1.9 14.7L6.3 13l1.4-1.4 2.4 2.4 6.6-6.6 1.4 1.4-8 8z"/></svg></span>' : ''}</span><br>
                                     <div>${linkify(c.text)}</div>
                                     ${attachmentHtml}
-                                    ${reactionHtml}
+                                    ${reactionBadge}
                                 </div>
                                 <div class="comment-meta">
-                                    <span>${c.time || "منذ لحظات"}</span>
-                                    <span style="cursor: pointer;" onclick="reactToComment('${postId}', ${cIdx})">أعجبني</span>
-                                    ${window.isAdmin ? `
-                                        <span style="cursor: pointer; color: #0084ff;" onclick="startReply('${postId}',${cIdx})">رد</span>
-                                        <span style="cursor: pointer; color: #0084ff;" onclick="editComment('${postId}',${cIdx})">تعديل</span>
-                                        <span style="cursor: pointer; color: red;" onclick="deleteComment('${postId}',${cIdx})">حذف</span>
-                                    ` : ''}
+                                    <span>${c.time}</span>
+                                    <span style="cursor: pointer;" onclick="reactToComment('${postId}', ${cIndex})">أعجبني</span>
+                                    <span style="cursor: pointer;" onclick="startReply('${postId}', ${cIndex})">رد</span>
+                                    ${window.isAdmin ? `<span style="cursor: pointer; color: #0084ff;" onclick="editComment('${postId}',${cIndex})">تعديل</span>` : ''}
+                                    ${window.isAdmin ? `<span style="cursor: pointer; color: red;" onclick="deleteComment('${postId}',${cIndex})">حذف</span>` : ''}
                                 </div>
-                                ${toggleRepliesBtn}
+                                ${repliesToggleBtn}
                                 ${repliesHtml}
                             </div>
                         </div>
                     `;
                 }).join('');
             }
-            bodyEl.innerHTML = commentsHtml;
 
-            if (!window.isAdmin) {
-                footerEl.innerHTML = `
-                    <div style="background: #f0f2f5; padding: 12px; border-radius: 8px; text-align: center; color: #65676b; font-size: 14px; font-weight: 700;">
-                        <i class="fa-solid fa-lock"></i> يمكن فقط للأشخاص الذين يتابعون هذه الصفحه منذ أكثر من 24ساعه التعليق 
-                    </div>
-                `;
-            } else {
-                let replyNotice = window.currentReplyCommentIndex !== null ? `
-                    <div style="background: #e7f3ff; padding: 6px 10px; border-radius: 6px; font-size: 12px; display: flex; justify-content: space-between; align-items: center; color: #0084ff; font-weight: 700;">
-                        <span>جاري الرد على التعليق #${window.currentReplyCommentIndex + 1}</span>
-                        <span style="cursor: pointer;" onclick="cancelReply()">✕ إلغاء</span>
-                    </div>
-                ` : '';
+            let replyNotice = window.currentReplyCommentIndex !== null ? `<div style="font-size:12px; color:#0084ff; display:flex; justify-content:space-between; align-items:center; background:#e7f3ff; padding:4px 8px; border-radius:4px;"><span>جار الرد على تعليق...</span><span style="cursor:pointer; font-weight:700;" onclick="cancelReply()">✕ إلغاء</span></div>` : '';
+            let fakeUserAvatarToShow = window.fakeUser.avatar && window.fakeUser.avatar.trim() !== "" ? window.fakeUser.avatar : "https://i.ibb.co/6Ry0q28/avatar-placeholder.png";
 
-                let fakeUserAvatarDisplay = window.fakeUser.avatar ? `<img src="${window.fakeUser.avatar}" style="width: 24px; height: 24px; border-radius: 50%; object-fit: cover;">` : `<i class="fa-solid fa-user-gear" style="color: #0084ff;"></i>`;
-
-                footerEl.innerHTML = `
-                    ${replyNotice}
-                    <div id="commentFilePreview" style="font-size: 11px; color: green; font-weight: 700;"></div>
-                    <div style="display: flex; align-items: center; justify-content: space-between; background: #e4e6eb; padding: 6px 10px; border-radius: 8px; cursor: pointer;" onclick="openSelectCommentAccountModal()" title="انقر لتغيير حساب التعليق">
-                        <div style="display: flex; align-items: center; gap: 8px; font-size: 13px;">
-                            ${fakeUserAvatarDisplay}
-                            <span>التعليق بواسطة: <b>${window.fakeUser.name}</b></span>
-                        </div>
-                        <span style="font-size: 12px; color: #0084ff; font-weight: 700;">تغيير الحساب</span>
-                    </div>
-                    <div style="display: flex; gap: 8px; align-items: center;">
-                        <label style="cursor: pointer; font-size: 18px; color: #0084ff; padding: 4px;" title="إرفاق صورة أو فيديو بالتعليق">
-                            <i class="fa-solid fa-camera"></i>
-                            <input type="file" accept="image/*,video/*" style="display: none;" onchange="handleCommentFileSelect(event)">
-                        </label>
-                        <input type="text" id="newCommentText" placeholder="اكتب تعليقاً باسم (${window.fakeUser.name})..." style="flex: 1; padding: 10px 14px; border-radius: 20px; border: 1px solid #ddd; outline: none; font-size: 14px; font-weight: 500; background: #f0f2f5;">
-                        <button onclick="submitNewComment()" style="background: #0084ff; color: #fff; border: none; border-radius: 50%; width: 38px; height: 38px; display: flex; align-items: center; justify-content: center; cursor: pointer; flex-shrink: 0;"><i class="fa-solid fa-paper-plane" style="font-size: 14px;"></i></button>
-                    </div>
-                `;
-            }
+            modalFooter.innerHTML = `
+                ${replyNotice}
+                <div id="commentFilePreview" style="font-size: 11px; color: green; font-weight: 700;"></div>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <img src="${fakeUserAvatarToShow}" style="width: 32px; height: 32px; border-radius: 50%; object-fit: cover; flex-shrink: 0; cursor: ${window.isAdmin ? 'pointer' : 'default'};" title="${window.isAdmin ? 'انقر لتغيير صورة الحساب الوهمي' : ''}" onclick="${window.isAdmin ? `handleCommentAvatarClick('fakeUser', null)` : ''}">
+                    ${window.isAdmin ? `<button type="button" onclick="openSelectCommentAccountModal()" style="background:#e4e6eb; border:none; padding:4px 8px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer;" title="تبديل حساب التعليق">👤 الحساب</button>` : ''}
+                    <input type="text" id="commentTextInput" placeholder="اكتب تعليقاً..." style="flex: 1; padding: 8px 12px; border: 1px solid #ccd0d5; border-radius: 20px; outline: none; font-size: 14px; font-weight: 500;" onkeydown="if(event.key === 'Enter') submitComment()">
+                    <i class="fa-solid fa-camera" style="color: #65676b; cursor: pointer; font-size: 18px;" onclick="document.getElementById('commentFilePicker').click()" title="إرفاق صورة أو فيديو"></i>
+                    <button type="button" onclick="submitComment()" style="background: #0084ff; color: #fff; border: none; padding: 6px 14px; border-radius: 16px; font-weight: 700; cursor: pointer; font-size: 13px;">إرسال</button>
+                </div>
+            `;
 
             window.history.pushState({ modal: 'commentsModal' }, '');
             document.getElementById('commentsModal').style.display = 'flex';
@@ -1590,51 +1592,43 @@
             if (el && el.style.display === 'flex') window.history.back();
         }
 
-        window.submitNewComment = async function() {
-            let textEl = document.getElementById('newCommentText');
-            let text = textEl ? textEl.value.trim() : "";
+        window.submitComment = async function() {
+            let inputEl = document.getElementById('commentTextInput');
+            let text = inputEl ? inputEl.value.trim() : "";
             if (!text && !commentTempFile.url) {
-                alert("يرجى كتابة نص التعليق أو إرفاق ملف.");
+                alert("يرجى كتابة نص أو إرفاق ملف للتعليق!");
                 return;
             }
-            let post = window.posts.find(p => String(p.id) === window.currentPostIdForComment);
+
+            let post = window.posts.find(p => String(p.id) === String(window.currentPostIdForComment));
             if (!post) return;
 
-            let authorNameVal = window.fakeUser.name;
-            let authorAvatarVal = window.fakeUser.avatar;
-            let isVerifiedVal = window.fakeUser.isVerified;
+            let timeAgoStr = "منذ لحظات";
+            let newCommentObj = {
+                name: window.fakeUser.name,
+                avatar: window.fakeUser.avatar,
+                isVerified: window.fakeUser.isVerified,
+                text: text,
+                time: timeAgoStr,
+                attachment: commentTempFile.url ? { url: commentTempFile.url, type: commentTempFile.type } : null,
+                reaction: "",
+                replies: []
+            };
 
             if (window.currentReplyCommentIndex !== null) {
                 if (!post.comments[window.currentReplyCommentIndex].replies) {
                     post.comments[window.currentReplyCommentIndex].replies = [];
                 }
-                post.comments[window.currentReplyCommentIndex].replies.push({
-                    authorName: authorNameVal,
-                    authorAvatar: authorAvatarVal,
-                    isVerified: isVerifiedVal,
-                    text: text,
-                    time: "منذ لحظات",
-                    attachmentUrl: commentTempFile.url,
-                    attachmentType: commentTempFile.type
-                });
+                post.comments[window.currentReplyCommentIndex].replies.push(newCommentObj);
                 window.currentReplyCommentIndex = null;
             } else {
-                post.comments.push({
-                    authorName: authorNameVal,
-                    authorAvatar: authorAvatarVal,
-                    isVerified: isVerifiedVal,
-                    text: text,
-                    time: "منذ لحظات",
-                    attachmentUrl: commentTempFile.url,
-                    attachmentType: commentTempFile.type
-                });
+                post.comments.push(newCommentObj);
             }
 
             updateCommentsCount(post);
-            await window.saveDataCloud();
             commentTempFile = { url: "", type: "none" };
-            if (textEl) textEl.value = "";
-            openComments(window.currentPostIdForComment);
+            await window.saveDataCloud();
+            openComments(post.id);
             renderFeed();
         }
 
