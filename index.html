@@ -401,10 +401,8 @@
             renderFeed();
         }
 
-        // دالة تحويل الطابع الزمني إلى وقت نسبي يتغير مع الوقت الحقيقي
         function getTimeAgo(timestamp) {
             if (!timestamp) return "منذ لحظات";
-            // إذا كان النص قديماً مخزناً كـ String وليست أرقاماً (لتوافق الإصدارات السابقة)
             if (typeof timestamp === 'string' && !/^\d+$/.test(timestamp)) return timestamp;
             let now = Date.now();
             let elapsed = Math.floor((now - Number(timestamp)) / 1000);
@@ -422,7 +420,6 @@
             return `منذ ${years} سنة`;
         }
 
-        // تحديث أوقات المنشورات والتعليقات تلقائياً كل دقيقة لتعكس الوقت الحقيقي
         setInterval(() => {
             renderFeed();
             let commentsModalEl = document.getElementById('commentsModal');
@@ -432,7 +429,7 @@
         }, 60000);
 
         function renderReactionsHtml(reactionsStr, reactionType = "😆") {
-            let countVal = reactionsStr !== undefined && reactionsStr !== null && reactionsStr !== "undefined" ? String(reactionsStr).replace(/[^\d]/g, '') : "";
+            let countVal = reactionsStr !== undefined && reactionsStr !== null && reactionsStr !== "undefined" ? String(reactionsStr) : "";
             if (!countVal) countVal = "5";
             let emojiToShow = reactionType ? reactionType : "😆";
             return `
@@ -980,7 +977,7 @@
             }
             document.getElementById('videoViewerName').innerText = author.name;
             document.getElementById('videoViewerBadge').innerHTML = getVerifiedBadgeHtml(author);
-            let reactionsCountVal = reactions !== undefined && reactions !== null && reactions !== "undefined" ? String(reactions).replace(/[^\d]/g, '') : "8";
+            let reactionsCountVal = reactions !== undefined && reactions !== null && reactions !== "undefined" ? String(reactions) : "8";
             if(!reactionsCountVal) reactionsCountVal = "8";
             document.getElementById('videoViewerReactionsCount').innerText = reactionsCountVal;
             let safeCommentsCount = commentsCount && commentsCount !== "undefined" ? commentsCount : "٨ تعليقات";
@@ -1279,7 +1276,7 @@
             } else {
                 modalFooter.innerHTML = `
                     <div style="text-align: center; padding: 12px; background: #f0f2f5; border-radius: 8px; color: #65676b; font-size: 14px; font-weight: 700;">
-                        يمكن فقط للأشخاص الذين يتابِعون هذه الصفحة منذ أكثر من 24 ساعة التعليق
+                        يمكن فقط للأشخاص الذين يتابعون هذه الصفحة منذ أكثر من 24 ساعة التعليق
                     </div>
                 `;
             }
@@ -1367,7 +1364,7 @@
                     document.getElementById('postModalTitle').innerText = "تعديل المنشور";
                     document.getElementById('postModalSubmitBtn').innerText = "حفظ التعديل";
                     document.getElementById('postText').value = post.text || "";
-                    document.getElementById('postReactionsInput').value = post.reactions || "5";
+                    document.getElementById('postReactionsInput').value = post.reactions !== undefined ? post.reactions : "5";
                     if(post.reactionType) document.getElementById('postReactionTypeSelect').value = post.reactionType;
                     if(post.authorId) selectEl.value = post.authorId;
                     document.getElementById('postLockedCheckbox').checked = post.isLocked || false;
