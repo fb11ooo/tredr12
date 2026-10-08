@@ -666,7 +666,7 @@
                     await window.saveDataCloud();
                     if (window.currentPostIdForComment) openComments(window.currentPostIdForComment);
                     renderFeed();
-                    alert("تم تحديث وحفظ صورة الحساب الوهمي سحابياً بنجاح!");
+                    alert("تم تحديث وحفظ صورة الحساب سحابياً بنجاح!");
                     targetCommentAvatarInfo = null;
                 } catch(err) {
                     alert("حدث خطأ أثناء تحميل وضغط الصورة.");
@@ -757,7 +757,7 @@
             let newName = prompt("أدخل اسم الحساب الوهمي للتعليقات:", window.fakeUser.name);
             if (newName !== null && newName.trim() !== "") {
                 window.fakeUser.name = newName.trim();
-                let verifyChoice = confirm("هل تريد أن يكون هذا الحساب الوهمي موثقاً (بعلامة صح زرقاء)؟\nانقر 'موافق' للتوثيق، أو 'إلغاء' لعدم التوثيق.");
+                let verifyChoice = confirm("هل تريد أن يكون هذا الحساب موثقاً (بعلامة صح زرقاء)؟\nانقر 'موافق' للتوثيق، أو 'إلغاء' لعدم التوثيق.");
                 window.fakeUser.isVerified = verifyChoice;
                 window.fakeUser.badge = "";
                 await window.saveDataCloud();
@@ -1202,7 +1202,7 @@
                             
                             return `
                                 <div style="display: flex; gap: 8px; margin-top: 8px; margin-right: 30px; align-items: flex-start;">
-                                    <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e4e6eb; flex-shrink: 0; display: flex; align-items: center; justify-content: center; ${window.isAdmin ? 'cursor:pointer;' : ''}" ${window.isAdmin ? `onclick="handleCommentAvatarClick('reply', ${cIdx}, ${rIdx})"` : ''} title="${window.isAdmin ? 'انقر لتغيير صورة الرد سحابياً' : ''}">
+                                    <div style="width: 28px; height: 28px; border-radius: 50%; overflow: hidden; background: #e4e6eb; flex-shrink: 0; display: flex; align-items: center; justify-content: center; ${window.isAdmin ? 'cursor:pointer;' : ''}" ${window.isAdmin ? `onclick="handleCommentAvatarClick('reply', ${cIdx},${rIdx})"` : ''} title="${window.isAdmin ? 'انقر لتغيير صورة الرد سحابياً' : ''}">
                                         ${rAvatar ? `<img src="${rAvatar}" style="width:100%; height:100%; object-fit:cover;">` : `<i class="fa-solid fa-user" style="font-size: 12px; color: #8a8d91;"></i>`}
                                     </div>
                                     <div style="max-width: 80%;">
